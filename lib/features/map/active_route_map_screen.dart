@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/dynavia_button.dart';
 import '../emergency/event_summary_screen.dart';
 
 class ActiveRouteMapScreen extends StatefulWidget {
-  const ActiveRouteMapScreen({super.key});
+  final String eventId;
+  const ActiveRouteMapScreen({super.key, required this.eventId});
 
   @override
   State<ActiveRouteMapScreen> createState() => _ActiveRouteMapScreenState();
@@ -16,6 +19,13 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
   bool _isDeactivating = false;
   double _deactivateProgress = 0.0;
   int _elapsedSeconds = 0;
+  int _vehiclesNotified = 0;
+  int _semaphoresActivated = 0;
+  bool _isLoadingStats = false;
+
+  static const String _baseEmergency = 'http://192.168.56.101:3001';
+  static const String _baseNotifications = 'http://192.168.56.101:3003';
+  static const String _baseTraffic = 'http://192.168.56.101:3005';
 
   late AnimationController _rippleController;
   late Animation<double> _rippleAnimation;
@@ -31,8 +41,42 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
       CurvedAnimation(parent: _rippleController, curve: Curves.easeOut),
     );
     _rippleController.repeat();
-
     _startTimer();
+    _loadStats();
+  }
+
+  // Carga stats reales desde ms-notifications y ms-traffic
+  Future<void> _loadStats() async {
+    setState(() => _isLoadingStats = true);
+    try {
+      final notifRes = await http.get(
+        Uri.parse('$_baseNotifications/notifications/${widget.eventId}/summary'),
+      ).timeout(const Duration(seconds: 3));
+
+      final trafficRes = await http.get(
+        Uri.parse('$_baseTraffic/semaphore/${widget.eventId}'),
+      ).timeout(const Duration(seconds: 3));
+
+      if (mounted) {
+        if (notifRes.statusCode == 200) {
+          final data = jsonDecode(notifRes.body);
+          final summary = data['summary'] as List;
+          int total = 0;
+          for (final item in summary) {
+            total += int.tryParse(item['total'].toString()) ?? 0;
+          }
+          setState(() => _vehiclesNotified = total);
+        }
+        if (trafficRes.statusCode == 200) {
+          final data = jsonDecode(trafficRes.body);
+          setState(() => _semaphoresActivated = data['count'] ?? 0);
+        }
+      }
+    } catch (_) {
+      // Sin conexión, se quedan en 0
+    } finally {
+      if (mounted) setState(() => _isLoadingStats = false);
+    }
   }
 
   void _startTimer() {
@@ -79,30 +123,62 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
     for (int i = 0; i < steps; i++) {
       await Future.delayed(const Duration(milliseconds: updateInterval));
       if (mounted && _isDeactivating) {
-        setState(() {
-          _deactivateProgress += increment;
-        });
+        setState(() => _deactivateProgress += increment);
       } else {
         return;
       }
     }
 
     if (mounted && _deactivateProgress >= 1.0) {
-      _completeDeactivation();
+      await _completeDeactivation();
     }
   }
 
-  void _completeDeactivation() {
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            const EventSummaryScreen(),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-        transitionDuration: const Duration(milliseconds: 500),
-      ),
-    );
+  // 🔌 Llamada real a ms-emergency para desactivar
+  Future<void> _completeDeactivation() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseEmergency/emergency/deactivate'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'event_id': widget.eventId}),
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  EventSummaryScreen(
+                    eventId: widget.eventId,
+                    totalSeconds: data['total_duration_seconds'] ?? _elapsedSeconds,
+                  ),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return FadeTransition(opacity: animation, child: child);
+              },
+              transitionDuration: const Duration(milliseconds: 500),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Si falla la red, navega igual con el tiempo local
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                EventSummaryScreen(
+                  eventId: widget.eventId,
+                  totalSeconds: _elapsedSeconds,
+                ),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 500),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -147,25 +223,16 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.map_rounded,
-                  size: 100,
-                  color: Colors.white.withOpacity(0.3),
-                ),
+                Icon(Icons.map_rounded, size: 100,
+                    color: Colors.white.withOpacity(0.3)),
                 const SizedBox(height: 16),
-                Text(
-                  'Mapa Mapbox',
-                  style: AppTypography.titleMedium.copyWith(
-                    color: Colors.white.withOpacity(0.7),
-                  ),
-                ),
+                Text('Mapa Mapbox',
+                    style: AppTypography.titleMedium
+                        .copyWith(color: Colors.white.withOpacity(0.7))),
                 const SizedBox(height: 8),
-                Text(
-                  'Integración Mapbox en desarrollo',
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: Colors.white.withOpacity(0.5),
-                  ),
-                ),
+                Text('Evento: ${widget.eventId}',
+                    style: AppTypography.bodyMedium
+                        .copyWith(color: Colors.white.withOpacity(0.5))),
               ],
             ),
           ),
@@ -189,8 +256,7 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
               Transform.scale(
                 scale: _rippleAnimation.value,
                 child: Container(
-                  width: 80,
-                  height: 80,
+                  width: 80, height: 80,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: AppColors.primary.withOpacity(0.3),
@@ -198,16 +264,14 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
                 ),
               ),
               Container(
-                width: 60,
-                height: 60,
+                width: 60, height: 60,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: AppColors.primary.withOpacity(0.5),
                 ),
               ),
               Container(
-                width: 44,
-                height: 44,
+                width: 44, height: 44,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.white,
@@ -218,11 +282,8 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.local_hospital_rounded,
-                  color: AppColors.emergency1,
-                  size: 24,
-                ),
+                child: const Icon(Icons.local_hospital_rounded,
+                    color: AppColors.emergency1, size: 24),
               ),
             ],
           ),
@@ -233,8 +294,7 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
 
   Widget _buildDestinationMarker() {
     return Positioned(
-      left: 100,
-      top: 150,
+      left: 100, top: 150,
       child: Column(
         children: [
           Container(
@@ -244,22 +304,13 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.emergency1.withOpacity(0.3),
-                  blurRadius: 8,
-                ),
+                    color: AppColors.emergency1.withOpacity(0.3), blurRadius: 8)
               ],
             ),
-            child: const Icon(
-              Icons.local_hospital_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
+            child: const Icon(Icons.local_hospital_rounded,
+                color: Colors.white, size: 20),
           ),
-          Container(
-            width: 2,
-            height: 20,
-            color: AppColors.emergency1,
-          ),
+          Container(width: 2, height: 20, color: AppColors.emergency1),
         ],
       ),
     );
@@ -272,7 +323,6 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
       {'top': 300.0, 'left': 220.0, 'status': 0},
       {'top': 400.0, 'left': 180.0, 'status': 2},
     ];
-
     return Stack(
       children: lights.map((light) {
         final status = light['status'] as int;
@@ -291,11 +341,7 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
               shape: BoxShape.circle,
               border: Border.all(color: color, width: 2),
             ),
-            child: Icon(
-              Icons.traffic,
-              color: color,
-              size: 16,
-            ),
+            child: Icon(Icons.traffic, color: color, size: 16),
           ),
         );
       }).toList(),
@@ -308,7 +354,6 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
       {'top': 180.0, 'left': 250.0},
       {'top': 350.0, 'left': 100.0},
     ];
-
     return Stack(
       children: vehicles.map((vehicle) {
         return Positioned(
@@ -320,15 +365,10 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
               color: AppColors.emergency2.withOpacity(0.3),
               shape: BoxShape.circle,
               border: Border.all(
-                color: AppColors.emergency2.withOpacity(0.5),
-                width: 1,
-              ),
+                  color: AppColors.emergency2.withOpacity(0.5), width: 1),
             ),
-            child: const Icon(
-              Icons.directions_car_rounded,
-              color: AppColors.emergency2,
-              size: 16,
-            ),
+            child: const Icon(Icons.directions_car_rounded,
+                color: AppColors.emergency2, size: 16),
           ),
         );
       }).toList(),
@@ -338,8 +378,7 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
   Widget _buildFloatingPill() {
     return Positioned(
       top: MediaQuery.of(context).padding.top + 16,
-      left: 20,
-      right: 20,
+      left: 20, right: 20,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
@@ -347,10 +386,9 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
           borderRadius: BorderRadius.circular(50),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            ),
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 20,
+                offset: const Offset(0, 4))
           ],
         ),
         child: Row(
@@ -358,27 +396,20 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 10,
-              height: 10,
+              width: 10, height: 10,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: AppColors.emergency1,
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.emergency1.withOpacity(0.5),
-                    blurRadius: 6,
-                  ),
+                      color: AppColors.emergency1.withOpacity(0.5), blurRadius: 6)
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              'NIVEL 1 ACTIVO',
-              style: AppTypography.labelLarge.copyWith(
-                color: AppColors.emergency1,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            Text('EMERGENCIA ACTIVA',
+                style: AppTypography.labelLarge.copyWith(
+                    color: AppColors.emergency1, fontWeight: FontWeight.bold)),
             const SizedBox(width: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -386,12 +417,9 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
                 color: AppColors.emergency1.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Text(
-                formattedTime,
-                style: AppTypography.subtitleMedium.copyWith(
-                  color: AppColors.emergency1,
-                ),
-              ),
+              child: Text(formattedTime,
+                  style: AppTypography.subtitleMedium
+                      .copyWith(color: AppColors.emergency1)),
             ),
           ],
         ),
@@ -408,10 +436,7 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
           color: AppColors.surface,
           shape: BoxShape.circle,
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)
           ],
         ),
         child: IconButton(
@@ -432,11 +457,7 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
           topRight: Radius.circular(28),
         ),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 20,
-            offset: Offset(0, -4),
-          ),
+          BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, -4))
         ],
       ),
       child: SingleChildScrollView(
@@ -446,8 +467,7 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
           children: [
             Center(
               child: Container(
-                width: 40,
-                height: 4,
+                width: 40, height: 4,
                 decoration: BoxDecoration(
                   color: AppColors.lightGrey,
                   borderRadius: BorderRadius.circular(2),
@@ -463,26 +483,19 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
                     color: AppColors.emergency1.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
-                    Icons.location_on_rounded,
-                    color: AppColors.emergency1,
-                    size: 24,
-                  ),
+                  child: const Icon(Icons.location_on_rounded,
+                      color: AppColors.emergency1, size: 24),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Hospital Santa Fe de Bogotá',
-                        style: AppTypography.subtitleMedium,
-                      ),
+                      Text('Hospital destino',
+                          style: AppTypography.subtitleMedium),
                       const SizedBox(height: 4),
-                      Text(
-                        'ETA estimado: 8 min',
-                        style: AppTypography.bodySmall,
-                      ),
+                      Text('ID: ${widget.eventId}',
+                          style: AppTypography.bodySmall),
                     ],
                   ),
                 ),
@@ -492,13 +505,11 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildStatItem(Icons.directions_car_rounded, '12', 'vehículos\nnotificados'),
-                Container(
-                  width: 1,
-                  height: 40,
-                  color: AppColors.lightGrey,
-                ),
-                _buildStatItem(Icons.traffic_rounded, '4', 'semáforos\nactivados'),
+                _buildStatItem(Icons.directions_car_rounded,
+                    '$_vehiclesNotified', 'vehículos\nnotificados'),
+                Container(width: 1, height: 40, color: AppColors.lightGrey),
+                _buildStatItem(Icons.traffic_rounded,
+                    '$_semaphoresActivated', 'semáforos\nactivados'),
               ],
             ),
             const SizedBox(height: 24),
@@ -516,20 +527,12 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
           children: [
             Icon(icon, color: AppColors.primary, size: 20),
             const SizedBox(width: 8),
-            Text(
-              value,
-              style: AppTypography.titleLarge.copyWith(
-                color: AppColors.primary,
-              ),
-            ),
+            Text(value,
+                style: AppTypography.titleLarge.copyWith(color: AppColors.primary)),
           ],
         ),
         const SizedBox(height: 4),
-        Text(
-          label,
-          style: AppTypography.labelSmall,
-          textAlign: TextAlign.center,
-        ),
+        Text(label, style: AppTypography.labelSmall, textAlign: TextAlign.center),
       ],
     );
   }
@@ -545,7 +548,6 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
     }
 
     return GestureDetector(
-      onLongPressStart: (_) {},
       onLongPressEnd: (_) => _handleDeactivateCancel(),
       child: Container(
         width: double.infinity,
@@ -553,10 +555,7 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
         decoration: BoxDecoration(
           color: AppColors.emergency1.withOpacity(0.1),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: AppColors.emergency1,
-            width: 2,
-          ),
+          border: Border.all(color: AppColors.emergency1, width: 2),
         ),
         child: Stack(
           children: [
@@ -575,24 +574,19 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   SizedBox(
-                    width: 24,
-                    height: 24,
+                    width: 24, height: 24,
                     child: CircularProgressIndicator(
                       value: _deactivateProgress,
                       strokeWidth: 2,
                       backgroundColor: AppColors.lightGrey,
                       valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppColors.emergency1,
-                      ),
+                          AppColors.emergency1),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Text(
-                    'Mantén presionado para desactivar',
-                    style: AppTypography.buttonText.copyWith(
-                      color: AppColors.emergency1,
-                    ),
-                  ),
+                  Text('Mantén presionado para desactivar',
+                      style: AppTypography.buttonText
+                          .copyWith(color: AppColors.emergency1)),
                 ],
               ),
             ),
@@ -603,6 +597,7 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
   }
 }
 
+// — AnimatedFractionallySizedBox (sin cambios) —
 class AnimatedFractionallySizedBox extends ImplicitlyAnimatedWidget {
   final double widthFactor;
   final Widget child;

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/dynavia_button.dart';
@@ -15,6 +17,12 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
     with TickerProviderStateMixin {
   int _currentStep = 0;
   int _selectedLevel = 0;
+  bool _isLoading = false;
+  String? _eventId;
+  String? _errorMessage;
+
+  // 🔧 Cambia esta IP por la de tu VM Ubuntu
+  static const String _baseUrl = 'http://192.168.56.101:3001';
 
   late AnimationController _stepController;
   late Animation<Offset> _slideAnimation;
@@ -51,11 +59,51 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
     }
   }
 
+  // 🔌 Llamada real a ms-emergency
+  Future<void> _activateEmergency() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/emergency/activate'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'ambulance_id': 'AMB-2024-001',
+          'severity_level': _selectedLevel,
+          'punto_b': {'lat': 4.7110, 'lng': -74.0721},
+          'origen': {'lat': 4.6900, 'lng': -74.0550},
+        }),
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _eventId = data['event_id'];
+          _isLoading = false;
+        });
+        _nextStep();
+      } else {
+        setState(() {
+          _errorMessage = 'Error del servidor: ${response.statusCode}';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Sin conexión con el servidor';
+        _isLoading = false;
+      });
+    }
+  }
+
   void _goToMap() {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
-            const ActiveRouteMapScreen(),
+            ActiveRouteMapScreen(eventId: _eventId ?? ''),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
             position: Tween<Offset>(
@@ -100,9 +148,7 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
   }
 
   Widget _buildOverlay() {
-    return Container(
-      color: Colors.black.withOpacity(0.7),
-    );
+    return Container(color: Colors.black.withOpacity(0.7));
   }
 
   Widget _buildIdentityConfirmation() {
@@ -131,43 +177,27 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
                   color: AppColors.primary.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.shield_outlined,
-                  color: AppColors.primary,
-                  size: 48,
-                ),
+                child: const Icon(Icons.shield_outlined, color: AppColors.primary, size: 48),
               ),
               const SizedBox(height: 24),
-              Text(
-                'Confirmar activación de emergencia',
-                style: AppTypography.titleSmall,
-                textAlign: TextAlign.center,
-              ),
+              Text('Confirmar activación de emergencia',
+                  style: AppTypography.titleSmall, textAlign: TextAlign.center),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
                   color: AppColors.emergency3.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.emergency3.withOpacity(0.3),
-                  ),
+                  border: Border.all(color: AppColors.emergency3.withOpacity(0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      'AMB-2024-001',
-                      style: AppTypography.subtitleMedium.copyWith(
-                        color: AppColors.emergency3,
-                      ),
-                    ),
+                    Text('AMB-2024-001',
+                        style: AppTypography.subtitleMedium
+                            .copyWith(color: AppColors.emergency3)),
                     const SizedBox(width: 8),
-                    const Icon(
-                      Icons.check_circle,
-                      color: AppColors.emergency3,
-                      size: 20,
-                    ),
+                    const Icon(Icons.check_circle, color: AppColors.emergency3, size: 20),
                   ],
                 ),
               ),
@@ -183,10 +213,7 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: DynaviaButton(
-                      text: 'Confirmar',
-                      onPressed: _nextStep,
-                    ),
+                    child: DynaviaButton(text: 'Confirmar', onPressed: _nextStep),
                   ),
                 ],
               ),
@@ -204,11 +231,8 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const SizedBox(height: 40),
-          Text(
-            'Selecciona el nivel de gravedad',
-            style: AppTypography.titleMedium,
-            textAlign: TextAlign.center,
-          ),
+          Text('Selecciona el nivel de gravedad',
+              style: AppTypography.titleMedium, textAlign: TextAlign.center),
           const SizedBox(height: 32),
           _buildLevelCard(
             level: 1,
@@ -234,12 +258,21 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
             icon: Icons.info_rounded,
           ),
           const SizedBox(height: 32),
-          if (_selectedLevel > 0)
-            DynaviaButton(
-              text: 'Activar Nivel $_selectedLevel',
-              onPressed: _nextStep,
-              icon: Icons.check_circle_outline,
+          if (_errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(_errorMessage!,
+                  style: TextStyle(color: AppColors.emergency1),
+                  textAlign: TextAlign.center),
             ),
+          if (_selectedLevel > 0)
+            _isLoading
+                ? const CircularProgressIndicator()
+                : DynaviaButton(
+                    text: 'Activar Nivel $_selectedLevel',
+                    onPressed: _activateEmergency,
+                    icon: Icons.check_circle_outline,
+                  ),
         ],
       ),
     );
@@ -292,24 +325,16 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
                     ),
                     const SizedBox(width: 16),
                     Expanded(
-                      child: Text(
-                        title,
-                        style: AppTypography.subtitleLarge.copyWith(
-                          color: color,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      child: Text(title,
+                          style: AppTypography.subtitleLarge.copyWith(
+                              color: color, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  description,
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.textSecondary,
-                    height: 1.5,
-                  ),
-                ),
+                Text(description,
+                    style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.textSecondary, height: 1.5)),
               ],
             ),
             if (isSelected)
@@ -324,15 +349,8 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
                       scale: value,
                       child: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.check,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                        child: const Icon(Icons.check, color: Colors.white, size: 20),
                       ),
                     );
                   },
@@ -353,20 +371,24 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
           children: [
             _buildSuccessAnimation(),
             const SizedBox(height: 40),
-            Text(
-              '¡Dynavia activado!',
-              style: AppTypography.titleLarge.copyWith(
-                color: AppColors.emergency3,
-              ),
-            ),
+            Text('¡Dynavia activado!',
+                style: AppTypography.titleLarge.copyWith(color: AppColors.emergency3)),
             const SizedBox(height: 16),
             Text(
               'Nivel $_selectedLevel • Protocolo completo iniciado\n${TimeOfDay.now().format(context)} hrs',
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
-              ),
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
+            if (_eventId != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'ID: $_eventId',
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            ],
             const SizedBox(height: 48),
             DynaviaButton(
               text: 'Ver trayecto en mapa',
@@ -406,11 +428,8 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
                   shape: BoxShape.circle,
                   color: AppColors.emergency3.withOpacity(0.2),
                 ),
-                child: const Icon(
-                  Icons.check_rounded,
-                  color: AppColors.emergency3,
-                  size: 64,
-                ),
+                child: const Icon(Icons.check_rounded,
+                    color: AppColors.emergency3, size: 64),
               ),
             ),
           ),

@@ -184,7 +184,7 @@ class _HomeAmbulanceScreenState extends State<HomeAmbulanceScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) => const ActivateEmergencyScreen(),
+                  builder: (context) => const ActiveRouteMapScreen(eventId: ''),
                 ),
               );
             },
@@ -230,7 +230,7 @@ class _HomeAmbulanceScreenState extends State<HomeAmbulanceScreen> {
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => const ActiveRouteMapScreen(),
+                    builder: (context) => const ActiveRouteMapScreen(eventId: ''),
                   ),
                 );
               },
