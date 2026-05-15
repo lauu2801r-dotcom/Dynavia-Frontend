@@ -22,7 +22,7 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
   String? _errorMessage;
 
   // 🔧 Cambia esta IP por la de tu VM Ubuntu
-  static const String _baseUrl = 'http://192.168.56.101:3001';
+  static const String _baseUrl = 'http://10.0.2.2:3001';
 
   late AnimationController _stepController;
   late Animation<Offset> _slideAnimation;
