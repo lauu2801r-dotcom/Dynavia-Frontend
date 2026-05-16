@@ -23,9 +23,9 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
   int _semaphoresActivated = 0;
   bool _isLoadingStats = false;
 
-  static const String _baseEmergency = 'http://192.168.56.101:3001';
-  static const String _baseNotifications = 'http://192.168.56.101:3003';
-  static const String _baseTraffic = 'http://192.168.56.101:3005';
+  static const String _baseEmergency = 'http://10.0.2.2:3001';
+  static const String _baseNotifications = 'http://10.0.3.15:3003';
+  static const String _baseTraffic = 'http://10.0.3.15:3005';
   
   late AnimationController _rippleController;
   late Animation<double> _rippleAnimation;
@@ -460,62 +460,59 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
           BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, -4))
         ],
       ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.lightGrey,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.lightGrey,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.emergency1.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.location_on_rounded,
-                      color: AppColors.emergency1, size: 24),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.emergency1.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Hospital destino',
-                          style: AppTypography.subtitleMedium),
-                      const SizedBox(height: 4),
-                      Text('ID: ${widget.eventId}',
-                          style: AppTypography.bodySmall),
-                    ],
-                  ),
+                child: const Icon(Icons.location_on_rounded,
+                    color: AppColors.emergency1, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Hospital destino', style: AppTypography.subtitleMedium),
+                    const SizedBox(height: 4),
+                    Text('ID: ${widget.eventId}', style: AppTypography.bodySmall),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStatItem(Icons.directions_car_rounded,
-                    '$_vehiclesNotified', 'vehículos\nnotificados'),
-                Container(width: 1, height: 40, color: AppColors.lightGrey),
-                _buildStatItem(Icons.traffic_rounded,
-                    '$_semaphoresActivated', 'semáforos\nactivados'),
-              ],
-            ),
-            const SizedBox(height: 24),
-            _buildDeactivateButton(),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildStatItem(Icons.directions_car_rounded,
+                  '$_vehiclesNotified', 'vehículos\nnotificados'),
+              Container(width: 1, height: 40, color: AppColors.lightGrey),
+              _buildStatItem(Icons.traffic_rounded,
+                  '$_semaphoresActivated', 'semáforos\nactivados'),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _buildDeactivateButton(),
+        ],
       ),
     );
   }

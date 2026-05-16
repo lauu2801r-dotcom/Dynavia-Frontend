@@ -21,8 +21,7 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
   String? _eventId;
   String? _errorMessage;
 
-  // 🔧 Cambia esta IP por la de tu VM Ubuntu
-  static const String _baseUrl = 'http://192.168.56.101:3001';
+  static const String _baseUrl = 'http://10.0.2.2:3001';
 
   late AnimationController _stepController;
   late Animation<Offset> _slideAnimation;
@@ -59,7 +58,6 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
     }
   }
 
-  // 🔌 Llamada real a ms-emergency
   Future<void> _activateEmergency() async {
     setState(() {
       _isLoading = true;
@@ -72,13 +70,13 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'ambulance_id': 'AMB-2024-001',
-          'severity_level': _selectedLevel,
+          'level': _selectedLevel,
           'punto_b': {'lat': 4.7110, 'lng': -74.0721},
           'origen': {'lat': 4.6900, 'lng': -74.0550},
         }),
       ).timeout(const Duration(seconds: 5));
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         setState(() {
           _eventId = data['event_id'];
@@ -87,13 +85,13 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
         _nextStep();
       } else {
         setState(() {
-          _errorMessage = 'Error del servidor: ${response.statusCode}';
+          _errorMessage = 'Error ${response.statusCode}: ${response.body}';
           _isLoading = false;
         });
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'Sin conexión con el servidor';
+        _errorMessage = e.toString();
         _isLoading = false;
       });
     }
@@ -262,7 +260,7 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: Text(_errorMessage!,
-                  style: TextStyle(color: AppColors.emergency1),
+                  style: const TextStyle(color: AppColors.emergency1),
                   textAlign: TextAlign.center),
             ),
           if (_selectedLevel > 0)
