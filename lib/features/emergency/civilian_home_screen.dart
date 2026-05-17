@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:async';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../auth/user_type_selection_screen.dart';
@@ -12,9 +15,14 @@ class CivilianHomeScreen extends StatefulWidget {
 
 class _CivilianHomeScreenState extends State<CivilianHomeScreen>
     with SingleTickerProviderStateMixin {
+  static const String _baseMetrics = 'http://10.0.2.2:3004';
+
   bool _hasEmergencyNearby = false;
-  final int _emergencyLevel = 1;
-  final int _estimatedArrival = 45;
+  int _emergencyLevel = 1;
+  String _eventId = '';
+  String _ambulanceId = '';
+  bool _isLoading = true;
+  Timer? _pollTimer;
 
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -30,12 +38,50 @@ class _CivilianHomeScreenState extends State<CivilianHomeScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
     _pulseController.repeat(reverse: true);
+    _checkEmergency();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _checkEmergency());
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _pulseController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkEmergency() async {
+    try {
+      final res = await http.get(
+        Uri.parse('$_baseMetrics/events'),
+      ).timeout(const Duration(seconds: 4));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final events = List<Map<String, dynamic>>.from(data['events'] ?? []);
+
+        // Buscar el evento activo más reciente de nivel 1 o 2
+        final activeEvent = events.firstWhere(
+          (e) => e['status'] == 'active' && (e['severity_level'] == 1 || e['severity_level'] == 2),
+          orElse: () => {},
+        );
+
+        setState(() {
+          _isLoading = false;
+          if (activeEvent.isNotEmpty) {
+            _hasEmergencyNearby = true;
+            _emergencyLevel = activeEvent['severity_level'] ?? 1;
+            _eventId = activeEvent['id'] ?? '';
+            _ambulanceId = activeEvent['ambulance_id'] ?? '';
+          } else {
+            _hasEmergencyNearby = false;
+            _eventId = '';
+            _ambulanceId = '';
+          }
+        });
+      }
+    } catch (_) {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -79,20 +125,24 @@ class _CivilianHomeScreenState extends State<CivilianHomeScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.map_rounded,
+              _hasEmergencyNearby ? Icons.warning_amber_rounded : Icons.map_rounded,
               size: 80,
-              color: AppColors.primary.withOpacity(0.5),
+              color: _hasEmergencyNearby
+                  ? AppColors.emergency1.withOpacity(0.7)
+                  : AppColors.primary.withOpacity(0.5),
             ),
             const SizedBox(height: 16),
             Text(
-              'Mapa conductor civil',
+              _hasEmergencyNearby ? '¡Emergencia activa!' : 'Mapa conductor civil',
               style: AppTypography.titleMedium.copyWith(
-                color: AppColors.primary.withOpacity(0.7),
+                color: _hasEmergencyNearby
+                    ? AppColors.emergency1.withOpacity(0.9)
+                    : AppColors.primary.withOpacity(0.7),
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Demostración Mapbox',
+              _hasEmergencyNearby ? 'Ambulancia en camino • $_ambulanceId' : 'Dynavia protege tu zona',
               style: AppTypography.bodySmall,
             ),
           ],
@@ -121,17 +171,21 @@ class _CivilianHomeScreenState extends State<CivilianHomeScreen>
         ),
         child: Row(
           children: [
-            Icon(
-              _hasEmergencyNearby ? Icons.warning_amber_rounded : Icons.check_circle_outline,
-              color: _hasEmergencyNearby ? AppColors.emergency1 : AppColors.emergency3,
-              size: 20,
-            ),
+            _isLoading
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : Icon(
+                    _hasEmergencyNearby ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+                    color: _hasEmergencyNearby ? AppColors.emergency1 : AppColors.emergency3,
+                    size: 20,
+                  ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                _hasEmergencyNearby
-                    ? 'Emergencia cercana • Mantente alerta'
-                    : 'Sin emergencias en tu zona',
+                _isLoading
+                    ? 'Verificando emergencias...'
+                    : _hasEmergencyNearby
+                        ? 'Emergencia Nivel $_emergencyLevel • Mantente alerta'
+                        : 'Sin emergencias en tu zona',
                 style: AppTypography.labelLarge.copyWith(
                   color: _hasEmergencyNearby ? AppColors.emergency1 : AppColors.emergency3,
                 ),
@@ -140,6 +194,7 @@ class _CivilianHomeScreenState extends State<CivilianHomeScreen>
             ),
             IconButton(
               onPressed: () {
+                _pollTimer?.cancel();
                 Navigator.of(context).pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const UserTypeSelectionScreen()),
                   (route) => false,
@@ -157,44 +212,35 @@ class _CivilianHomeScreenState extends State<CivilianHomeScreen>
 
   Widget _buildEmergencyBanner() {
     return Positioned(
-      top: MediaQuery.of(context).padding.top + 16,
-      left: 20,
-      right: 20,
+      bottom: 0,
+      left: 0,
+      right: 0,
       child: ScaleTransition(
         scale: _pulseAnimation,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           decoration: BoxDecoration(
             color: AppColors.emergency1.withOpacity(0.95),
-            borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
                 color: AppColors.emergency1.withOpacity(0.4),
                 blurRadius: 20,
-                offset: const Offset(0, 4),
+                offset: const Offset(0, -4),
               ),
             ],
           ),
-          child: Column(
+          child: Row(
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.warning_rounded,
+              const Icon(Icons.warning_rounded, color: Colors.white, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'EMERGENCIA NIVEL $_emergencyLevel • DYNAVIA',
+                  style: AppTypography.labelLarge.copyWith(
                     color: Colors.white,
-                    size: 24,
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'EMERGENCIA NIVEL $_emergencyLevel CERCANA — DYNAVIA',
-                      style: AppTypography.labelLarge.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           ),
@@ -213,11 +259,7 @@ class _CivilianHomeScreenState extends State<CivilianHomeScreen>
           topRight: Radius.circular(28),
         ),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 20,
-            offset: Offset(0, -4),
-          ),
+          BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, -4)),
         ],
       ),
       child: SingleChildScrollView(
@@ -225,8 +267,7 @@ class _CivilianHomeScreenState extends State<CivilianHomeScreen>
         child: Column(
           children: [
             Container(
-              width: 40,
-              height: 4,
+              width: 40, height: 4,
               decoration: BoxDecoration(
                 color: AppColors.lightGrey,
                 borderRadius: BorderRadius.circular(2),
@@ -234,8 +275,6 @@ class _CivilianHomeScreenState extends State<CivilianHomeScreen>
             ),
             const SizedBox(height: 20),
             if (_hasEmergencyNearby) _buildEmergencyInstructions() else _buildSafeStatus(),
-            const SizedBox(height: 20),
-            _buildDemoControls(),
           ],
         ),
       ),
@@ -243,42 +282,24 @@ class _CivilianHomeScreenState extends State<CivilianHomeScreen>
   }
 
   Widget _buildSafeStatus() {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppColors.emergency3.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: AppColors.emergency3.withOpacity(0.3),
-            ),
-          ),
-          child: Column(
-            children: [
-              Icon(
-                Icons.shield_outlined,
-                color: AppColors.emergency3,
-                size: 48,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Dynavia te protege',
-                style: AppTypography.subtitleLarge.copyWith(
-                  color: AppColors.emergency3,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Sistema activo en tu zona',
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.emergency3.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.emergency3.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.shield_outlined, color: AppColors.emergency3, size: 48),
+          const SizedBox(height: 12),
+          Text('Dynavia te protege',
+              style: AppTypography.subtitleLarge.copyWith(color: AppColors.emergency3)),
+          const SizedBox(height: 8),
+          Text('Sistema activo — verificando cada 3 segundos',
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
+        ],
+      ),
     );
   }
 
@@ -288,27 +309,22 @@ class _CivilianHomeScreenState extends State<CivilianHomeScreen>
       decoration: BoxDecoration(
         color: AppColors.emergency1.withOpacity(0.05),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppColors.emergency1.withOpacity(1.0),
-          width: 1.5,
-        ),
+        border: Border.all(color: AppColors.emergency1, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.warning_amber_rounded,
-                color: AppColors.emergency1,
-                size: 24,
-              ),
+              const Icon(Icons.warning_amber_rounded, color: AppColors.emergency1, size: 24),
               const SizedBox(width: 12),
-              Text(
-                'INSTRUCCIONES DE DESPEJE • DYNAVIA',
-                style: AppTypography.labelLarge.copyWith(
-                  color: AppColors.emergency1,
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                child: Text(
+                  'INSTRUCCIONES • DYNAVIA',
+                  style: AppTypography.labelLarge.copyWith(
+                    color: AppColors.emergency1,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -317,7 +333,9 @@ class _CivilianHomeScreenState extends State<CivilianHomeScreen>
           _buildInstructionItem(Icons.arrow_back, 'Cede el carril derecho inmediatamente'),
           const SizedBox(height: 12),
           _buildInstructionItem(Icons.stop_circle_outlined, 'Detente 50m antes de la intersección'),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+          _buildInstructionItem(Icons.volume_up_outlined, 'Mantén encendidas las luces de emergencia'),
+          const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -328,30 +346,25 @@ class _CivilianHomeScreenState extends State<CivilianHomeScreen>
               children: [
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: AppColors.emergency1,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    Icons.local_hospital_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
+                  child: const Icon(Icons.local_hospital_rounded, color: Colors.white, size: 20),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text('Unidad activa', style: AppTypography.bodySmall),
                       Text(
-                        'Ambulancia llega en',
-                        style: AppTypography.bodySmall,
+                        _ambulanceId.isNotEmpty ? _ambulanceId : 'AMB-2024-001',
+                        style: AppTypography.subtitleLarge.copyWith(color: AppColors.emergency1),
                       ),
                       Text(
-                        '~$_estimatedArrival segundos',
-                        style: AppTypography.subtitleLarge.copyWith(
-                          color: AppColors.emergency1,
-                        ),
+                        'Evento: ${_eventId.isNotEmpty ? _eventId.substring(0, 16) : ''}...',
+                        style: AppTypography.labelSmall,
                       ),
                     ],
                   ),
@@ -377,45 +390,8 @@ class _CivilianHomeScreenState extends State<CivilianHomeScreen>
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Text(
-            text,
-            style: AppTypography.bodyMedium.copyWith(
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDemoControls() {
-    return Column(
-      children: [
-        Text(
-          'Demo controls',
-          style: AppTypography.labelSmall,
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    _hasEmergencyNearby = !_hasEmergencyNearby;
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _hasEmergencyNearby
-                      ? AppColors.emergency3
-                      : AppColors.emergency1,
-                ),
-                child: Text(
-                  _hasEmergencyNearby ? 'Desactivar emergencia' : 'Activar emergencia',
-                ),
-              ),
-            ),
-          ],
+          child: Text(text,
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary)),
         ),
       ],
     );
