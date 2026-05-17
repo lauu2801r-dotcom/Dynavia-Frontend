@@ -289,7 +289,7 @@ class _CivilianHomeScreenState extends State<CivilianHomeScreen>
         color: AppColors.emergency1.withOpacity(0.05),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: AppColors.emergency1.withOpacity(1.5),
+          color: AppColors.emergency1.withOpacity(1.0),
           width: 1.5,
         ),
       ),

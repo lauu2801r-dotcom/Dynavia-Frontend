@@ -65,7 +65,7 @@ class _MetricCardState extends State<MetricCard>
       child: SlideTransition(
         position: _slideAnimation,
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(20),
@@ -79,27 +79,27 @@ class _MetricCardState extends State<MetricCard>
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: iconColor.withOpacity(0.14),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(
-                  widget.icon,
-                  color: iconColor,
-                  size: 28,
-                ),
+                child: Icon(widget.icon, color: iconColor, size: 22),
               ),
-              const Spacer(),
+              const SizedBox(height: 8),
               Text(
                 widget.value,
                 style: AppTypography.metricValue.copyWith(
                   color: scheme.onSurface,
+                  fontSize: 22,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 widget.label,
                 style: AppTypography.metricLabel.copyWith(

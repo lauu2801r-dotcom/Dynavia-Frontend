@@ -269,7 +269,7 @@ class _EventSummaryScreenState extends State<EventSummaryScreen>
           crossAxisCount: 2,
           mainAxisSpacing: 16,
           crossAxisSpacing: 16,
-          childAspectRatio: 1.5,
+          childAspectRatio: 1.2,
           children: [
             MetricCard(
               value: formattedTime,

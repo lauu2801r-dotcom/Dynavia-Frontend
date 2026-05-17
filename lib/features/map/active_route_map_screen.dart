@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
+import 'dart:async';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/dynavia_button.dart';
@@ -22,9 +25,17 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
   int _vehiclesNotified = 0;
   int _semaphoresActivated = 0;
 
+  // GPS en tiempo real
+  double? _currentLat;
+  double? _currentLng;
+  WebSocketChannel? _wsChannel;
+  StreamSubscription<Position>? _gpsSubscription;
+  bool _gpsConnected = false;
+
   static const String _baseEmergency = 'http://10.0.2.2:3001';
   static const String _baseNotifications = 'http://10.0.2.2:3003';
   static const String _baseTraffic = 'http://10.0.2.2:3005';
+  static const String _wsGeo = 'ws://10.0.2.2:3002';
 
   late AnimationController _rippleController;
   late Animation<double> _rippleAnimation;
@@ -41,8 +52,81 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
     );
     _rippleController.repeat();
     _startTimer();
+    _initGPS();
     if (widget.eventId.isNotEmpty) _loadStats();
   }
+
+  // ── GPS + WebSocket ──────────────────────────────────────────
+  Future<void> _initGPS() async {
+    // Pedir permisos
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        debugPrint('❌ Permiso GPS denegado');
+        return;
+      }
+    }
+    if (permission == LocationPermission.deniedForever) {
+      debugPrint('❌ Permiso GPS denegado permanentemente');
+      return;
+    }
+
+    // Conectar WebSocket
+    _connectWebSocket();
+
+    // Escuchar GPS cada 1 segundo (RNF-02)
+    _gpsSubscription = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 0,
+      ),
+    ).listen((Position position) {
+      setState(() {
+        _currentLat = position.latitude;
+        _currentLng = position.longitude;
+      });
+      _sendGPS(position.latitude, position.longitude);
+    });
+  }
+
+  void _connectWebSocket() {
+    try {
+      _wsChannel = WebSocketChannel.connect(Uri.parse(_wsGeo));
+      setState(() => _gpsConnected = true);
+      debugPrint('📡 WebSocket GPS conectado');
+
+      _wsChannel!.stream.listen(
+        (message) => debugPrint('📍 WS response: $message'),
+        onError: (e) {
+          debugPrint('❌ WS error: $e');
+          setState(() => _gpsConnected = false);
+        },
+        onDone: () {
+          debugPrint('📡 WS cerrado');
+          setState(() => _gpsConnected = false);
+        },
+      );
+    } catch (e) {
+      debugPrint('❌ Error conectando WS: $e');
+      setState(() => _gpsConnected = false);
+    }
+  }
+
+  void _sendGPS(double lat, double lng) {
+    if (_wsChannel == null || widget.eventId.isEmpty) return;
+    try {
+      _wsChannel!.sink.add(jsonEncode({
+        'event_id': widget.eventId,
+        'lat': lat,
+        'lng': lng,
+      }));
+      debugPrint('📍 GPS enviado: $lat, $lng');
+    } catch (e) {
+      debugPrint('❌ Error enviando GPS: $e');
+    }
+  }
+  // ────────────────────────────────────────────────────────────
 
   Future<void> _loadStats() async {
     try {
@@ -92,6 +176,8 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
   @override
   void dispose() {
     _rippleController.dispose();
+    _gpsSubscription?.cancel();
+    _wsChannel?.sink.close();
     super.dispose();
   }
 
@@ -128,6 +214,10 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
   }
 
   Future<void> _completeDeactivation() async {
+    // Detener GPS y WebSocket
+    _gpsSubscription?.cancel();
+    _wsChannel?.sink.close();
+
     try {
       final response = await http.post(
         Uri.parse('$_baseEmergency/emergency/deactivate'),
@@ -148,9 +238,8 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
                   eventId: widget.eventId,
                   totalSeconds: totalSeconds,
                 ),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
+            transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+                FadeTransition(opacity: animation, child: child),
             transitionDuration: const Duration(milliseconds: 500),
           ),
         );
@@ -164,9 +253,8 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
                   eventId: widget.eventId,
                   totalSeconds: _elapsedSeconds,
                 ),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
+            transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+                FadeTransition(opacity: animation, child: child),
             transitionDuration: const Duration(milliseconds: 500),
           ),
         );
@@ -199,37 +287,54 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
   }
 
   Widget _buildMap() {
-  return Container(
-    color: const Color(0xFF003DB3),
-    child: Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.map_rounded, size: 80, color: Colors.white30),
-          const SizedBox(height: 12),
-          const Text('Mapa en tiempo real',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              )),
-          const SizedBox(height: 4),
-          Text(
-            widget.eventId.isEmpty
-                ? 'Sin evento'
-                : widget.eventId.length > 12
-                    ? '${widget.eventId.substring(0, 12)}...'
-                    : widget.eventId,
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
-          ),
-          const SizedBox(height: 24),
-          _buildAmbulanceMarker(),
-        ],
+    return Container(
+      color: const Color(0xFF003DB3),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.map_rounded, size: 80, color: Colors.white30),
+            const SizedBox(height: 12),
+            const Text('Mapa en tiempo real',
+                style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            // Mostrar coordenadas GPS reales
+            Text(
+              _currentLat != null
+                  ? '${_currentLat!.toStringAsFixed(5)}, ${_currentLng!.toStringAsFixed(5)}'
+                  : 'Obteniendo GPS...',
+              style: const TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+            const SizedBox(height: 4),
+            // Indicador WebSocket
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 8, height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _gpsConnected ? Colors.greenAccent : Colors.redAccent,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _gpsConnected ? 'WebSocket conectado' : 'Reconectando...',
+                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _buildAmbulanceMarker(),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildAmbulanceMarker() {
     return AnimatedBuilder(
@@ -298,14 +403,16 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
                 color: AppColors.emergency1,
                 boxShadow: [
                   BoxShadow(
-                      color: AppColors.emergency1.withOpacity(0.5), blurRadius: 6)
+                      color: AppColors.emergency1.withOpacity(0.5),
+                      blurRadius: 6)
                 ],
               ),
             ),
             const SizedBox(width: 8),
             Text('EMERGENCIA ACTIVA',
                 style: AppTypography.labelLarge.copyWith(
-                    color: AppColors.emergency1, fontWeight: FontWeight.bold)),
+                    color: AppColors.emergency1,
+                    fontWeight: FontWeight.bold)),
             const SizedBox(width: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -352,7 +459,8 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
           topRight: Radius.circular(28),
         ),
         boxShadow: [
-          BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, -4))
+          BoxShadow(
+              color: Colors.black12, blurRadius: 20, offset: Offset(0, -4))
         ],
       ),
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
@@ -386,9 +494,11 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Hospital destino', style: AppTypography.subtitleMedium),
+                    Text('GPS activo', style: AppTypography.subtitleMedium),
                     Text(
-                      widget.eventId.isEmpty ? 'Sin evento' : widget.eventId,
+                      _currentLat != null
+                          ? 'Lat: ${_currentLat!.toStringAsFixed(4)} Lng: ${_currentLng!.toStringAsFixed(4)}'
+                          : 'Esperando señal GPS...',
                       style: AppTypography.bodySmall,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -425,11 +535,14 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
             Icon(icon, color: AppColors.primary, size: 20),
             const SizedBox(width: 8),
             Text(value,
-                style: AppTypography.titleLarge.copyWith(color: AppColors.primary)),
+                style: AppTypography.titleLarge
+                    .copyWith(color: AppColors.primary)),
           ],
         ),
         const SizedBox(height: 4),
-        Text(label, style: AppTypography.labelSmall, textAlign: TextAlign.center),
+        Text(label,
+            style: AppTypography.labelSmall,
+            textAlign: TextAlign.center),
       ],
     );
   }
