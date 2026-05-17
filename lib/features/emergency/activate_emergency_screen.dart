@@ -366,6 +366,7 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             _buildSuccessAnimation(),
             const SizedBox(height: 40),
@@ -373,7 +374,7 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
                 style: AppTypography.titleLarge.copyWith(color: AppColors.emergency3)),
             const SizedBox(height: 16),
             Text(
-              'Nivel $_selectedLevel • Protocolo completo iniciado\n${TimeOfDay.now().format(context)} hrs',
+              'Nivel $_selectedLevel • Protocolo iniciado\n${TimeOfDay.now().format(context)} hrs',
               style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
@@ -385,6 +386,7 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
                   color: AppColors.textSecondary,
                   fontSize: 12,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
             ],
             const SizedBox(height: 48),
@@ -402,32 +404,32 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
   Widget _buildSuccessAnimation() {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 1000),
       curve: Curves.elasticOut,
       builder: (context, value, child) {
         return Transform.scale(
           scale: value,
           child: Container(
-            width: 160,
-            height: 160,
+            width: 140,
+            height: 140,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: AppColors.emergency3.withOpacity(0.1),
               border: Border.all(
-                color: AppColors.emergency3.withOpacity(1 - value),
+                color: AppColors.emergency3.withOpacity((1 - value).clamp(0.01, 1.0)),
                 width: 4,
               ),
             ),
             child: Center(
               child: Container(
-                width: 120,
-                height: 120,
+                width: 100,
+                height: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: AppColors.emergency3.withOpacity(0.2),
                 ),
                 child: const Icon(Icons.check_rounded,
-                    color: AppColors.emergency3, size: 64),
+                    color: AppColors.emergency3, size: 56),
               ),
             ),
           ),

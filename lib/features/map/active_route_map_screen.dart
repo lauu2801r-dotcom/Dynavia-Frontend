@@ -199,42 +199,37 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
   }
 
   Widget _buildMap() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            AppColors.primaryDark.withOpacity(0.8),
-            AppColors.primary.withOpacity(0.6),
-          ],
-        ),
-      ),
-      child: Stack(
+  return Container(
+    color: const Color(0xFF003DB3),
+    child: Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.map_rounded, size: 80,
-                    color: Colors.white.withOpacity(0.3)),
-                const SizedBox(height: 12),
-                Text('Mapa en tiempo real',
-                    style: AppTypography.titleMedium
-                        .copyWith(color: Colors.white.withOpacity(0.7))),
-                const SizedBox(height: 4),
-                Text('Evento: ${widget.eventId.isEmpty ? "Sin ID" : widget.eventId.substring(0, 12)}...',
-                    style: AppTypography.bodySmall
-                        .copyWith(color: Colors.white.withOpacity(0.5))),
-              ],
-            ),
+          const Icon(Icons.map_rounded, size: 80, color: Colors.white30),
+          const SizedBox(height: 12),
+          const Text('Mapa en tiempo real',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              )),
+          const SizedBox(height: 4),
+          Text(
+            widget.eventId.isEmpty
+                ? 'Sin evento'
+                : widget.eventId.length > 12
+                    ? '${widget.eventId.substring(0, 12)}...'
+                    : widget.eventId,
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
           ),
+          const SizedBox(height: 24),
           _buildAmbulanceMarker(),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildAmbulanceMarker() {
     return AnimatedBuilder(
