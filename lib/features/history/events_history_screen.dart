@@ -13,7 +13,7 @@ class EventsHistoryScreen extends StatefulWidget {
 }
 
 class _EventsHistoryScreenState extends State<EventsHistoryScreen> {
-  static const String _baseMetrics = 'http://186.146.84.78:3004';
+  static const String _baseMetrics = 'http://10.0.2.2:3004';
   String _selectedFilter = 'Todos';
   final List<String> _filters = ['Todos', 'Nivel 1', 'Nivel 2', 'Nivel 3'];
   List<Map<String, dynamic>> _events = [];
