@@ -32,10 +32,10 @@ class _ActiveRouteMapScreenState extends State<ActiveRouteMapScreen>
   StreamSubscription<Position>? _gpsSubscription;
   bool _gpsConnected = false;
 
-  static const String _baseEmergency = 'http://10.0.2.2:3001';
-  static const String _baseNotifications = 'http://10.0.2.2:3003';
-  static const String _baseTraffic = 'http://10.0.2.2:3005';
-  static const String _wsGeo = 'ws://10.0.2.2:3002';
+  static const String _baseEmergency = 'http://192.168.56.101:3001';
+  static const String _baseNotifications = 'http://192.168.56.101:3003';
+  static const String _baseTraffic = 'http://192.168.56.101:3005';
+  static const String _wsGeo = 'ws://192.168.56.101:3002';
 
   late AnimationController _rippleController;
   late Animation<double> _rippleAnimation;

@@ -14,7 +14,7 @@ class ShiftMetricsScreen extends StatefulWidget {
 
 class _ShiftMetricsScreenState extends State<ShiftMetricsScreen>
     with SingleTickerProviderStateMixin {
-  static const String _baseMetrics = 'http://10.0.2.2:3004';
+  static const String _baseMetrics = 'http://192.168.56.101:3004';
 
   late AnimationController _controller;
   late Animation<double> _animation;
