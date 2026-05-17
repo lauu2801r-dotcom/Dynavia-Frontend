@@ -15,7 +15,7 @@ class CivilianHomeScreen extends StatefulWidget {
 
 class _CivilianHomeScreenState extends State<CivilianHomeScreen>
     with SingleTickerProviderStateMixin {
-  static const String _baseMetrics = 'http://10.0.2.2:3004';
+  static const String _baseMetrics = 'http://186.146.84.78:3004';
 
   bool _hasEmergencyNearby = false;
   int _emergencyLevel = 1;

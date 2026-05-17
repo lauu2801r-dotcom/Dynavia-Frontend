@@ -13,7 +13,7 @@ class EventsHistoryScreen extends StatefulWidget {
 }
 
 class _EventsHistoryScreenState extends State<EventsHistoryScreen> {
-  static const String _baseMetrics = 'http://10.0.2.2:3004';
+  static const String _baseMetrics = 'http://186.146.84.78:3004';
   String _selectedFilter = 'Todos';
   final List<String> _filters = ['Todos', 'Nivel 1', 'Nivel 2', 'Nivel 3'];
   List<Map<String, dynamic>> _events = [];
@@ -118,16 +118,22 @@ class _EventsHistoryScreenState extends State<EventsHistoryScreen> {
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
+                color: isSelected
+                    ? AppColors.primary
+                    : Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: isSelected ? AppColors.primary : Theme.of(context).colorScheme.outlineVariant,
+                  color: isSelected
+                      ? AppColors.primary
+                      : Theme.of(context).colorScheme.outlineVariant,
                 ),
               ),
               child: Text(
                 filter,
                 style: AppTypography.labelLarge.copyWith(
-                  color: isSelected ? Colors.white : Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: isSelected
+                      ? Colors.white
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -155,7 +161,8 @@ class _EventsHistoryScreenState extends State<EventsHistoryScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.search_off_rounded, size: 80, color: AppColors.primary.withOpacity(0.3)),
+          Icon(Icons.search_off_rounded, size: 80,
+              color: AppColors.primary.withOpacity(0.3)),
           const SizedBox(height: 16),
           Text('Sin eventos registrados', style: AppTypography.titleMedium),
         ],
@@ -166,7 +173,8 @@ class _EventsHistoryScreenState extends State<EventsHistoryScreen> {
       child: ListView.builder(
         padding: const EdgeInsets.all(20),
         itemCount: _visibleEvents.length,
-        itemBuilder: (context, index) => _buildEventCard(_visibleEvents[index]),
+        itemBuilder: (context, index) =>
+            _buildEventCard(_visibleEvents[index]),
       ),
     );
   }
@@ -193,10 +201,11 @@ class _EventsHistoryScreenState extends State<EventsHistoryScreen> {
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Fila superior: badge + status + fecha
             Row(
               children: [
                 StatusBadge(level: level, text: 'Nivel $level'),
@@ -212,18 +221,25 @@ class _EventsHistoryScreenState extends State<EventsHistoryScreen> {
                   child: Text(
                     status == 'completed' ? 'Completado' : 'Activo',
                     style: AppTypography.labelSmall.copyWith(
-                      color: status == 'completed' ? AppColors.emergency3 : AppColors.emergency2,
+                      color: status == 'completed'
+                          ? AppColors.emergency3
+                          : AppColors.emergency2,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(date, style: AppTypography.labelSmall),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 4),
+            // Fecha en línea separada
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(date, style: AppTypography.labelSmall),
+            ),
+            const SizedBox(height: 10),
+            // ID del evento
             Row(
               children: [
-                Icon(Icons.local_hospital_rounded, color: color, size: 20),
+                Icon(Icons.local_hospital_rounded, color: color, size: 18),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -234,9 +250,11 @@ class _EventsHistoryScreenState extends State<EventsHistoryScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+            const SizedBox(height: 12),
+            // Chips en Wrap para que no se desborden
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 _buildChip(Icons.timer_outlined, duration),
                 _buildChip(Icons.directions_car_outlined,
@@ -253,7 +271,7 @@ class _EventsHistoryScreenState extends State<EventsHistoryScreen> {
 
   Widget _buildChip(IconData icon, String text) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: AppColors.primary.withOpacity(0.10),
         borderRadius: BorderRadius.circular(12),
@@ -261,8 +279,8 @@ class _EventsHistoryScreenState extends State<EventsHistoryScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: AppColors.primary, size: 16),
-          const SizedBox(width: 6),
+          Icon(icon, color: AppColors.primary, size: 14),
+          const SizedBox(width: 5),
           Text(text, style: AppTypography.labelSmall),
         ],
       ),

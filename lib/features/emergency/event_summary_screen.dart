@@ -27,7 +27,7 @@ class _EventSummaryScreenState extends State<EventSummaryScreen>
     late Animation<double> _headerAnimation;
     late Animation<double> _metricsAnimation;
 
-    static const String _baseMetrics = 'http://10.0.2.2:3004';
+    static const String _baseMetrics = 'http://186.146.84.78:3004';
 
     // Datos reales del evento
     int _vehiclesNotified = 0;

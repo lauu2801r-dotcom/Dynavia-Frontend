@@ -21,7 +21,7 @@ class _ActivateEmergencyScreenState extends State<ActivateEmergencyScreen>
   String? _eventId;
   String? _errorMessage;
 
-  static const String _baseUrl = 'http://10.0.2.2:3001';
+  static const String _baseUrl = 'http://186.146.84.78:3001';
 
   late AnimationController _stepController;
   late Animation<Offset> _slideAnimation;

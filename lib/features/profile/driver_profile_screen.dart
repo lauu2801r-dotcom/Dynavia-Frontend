@@ -202,6 +202,7 @@ class DriverProfileScreen extends StatelessWidget {
   }
 
   Widget _buildProfileContent(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -323,7 +324,7 @@ class DriverProfileScreen extends StatelessWidget {
             crossAxisCount: 2,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: 1.35,
+            childAspectRatio: 1.3,
             children: [
               _MetricTile(
                 title: 'Eventos hoy',
@@ -364,7 +365,7 @@ class DriverProfileScreen extends StatelessWidget {
             crossAxisCount: 2,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: 1.6,
+            childAspectRatio: 1.3,
             children: [
               _MetricTile(
                 title: 'Vehículos notificados',
@@ -400,28 +401,24 @@ class DriverProfileScreen extends StatelessWidget {
           _buildSectionTitle(context, 'Calidad del sistema'),
           const SizedBox(height: 10),
           Wrap(
-            spacing: 10,
-            runSpacing: 10,
+            spacing: 12,
+            runSpacing: 12,
             children: [
-              _StatusChip(
-                label: 'GPS $gpsRate',
-                icon: Icons.gps_fixed_rounded,
-                color: AppColors.emergency3,
+              SizedBox(
+                width: (MediaQuery.of(context).size.width - 52) / 2,
+                child: _MetricTile(title: 'Eventos hoy', value: '$eventsToday', subtitle: 'Activaciones', icon: Icons.bolt_rounded, color: AppColors.primary),
               ),
-              _StatusChip(
-                label: 'Latencia $avgLatency',
-                icon: Icons.network_check_rounded,
-                color: AppColors.primary,
+              SizedBox(
+                width: (MediaQuery.of(context).size.width - 52) / 2,
+                child: _MetricTile(title: 'Promedio A→B', value: avgAB, subtitle: 'Trayecto', icon: Icons.timer_outlined, color: AppColors.primaryLight),
               ),
-              _StatusChip(
-                label: 'Turno activo',
-                icon: Icons.check_circle_outline,
-                color: AppColors.emergency3,
+              SizedBox(
+                width: (MediaQuery.of(context).size.width - 52) / 2,
+                child: _MetricTile(title: 'Mejor A→B', value: bestAB, subtitle: 'Hoy', icon: Icons.emoji_events_outlined, color: AppColors.emergency3),
               ),
-              _StatusChip(
-                label: 'Zonas: Usaquén y Barrios Unidos',
-                icon: Icons.location_on_outlined,
-                color: AppColors.emergency2,
+              SizedBox(
+                width: (MediaQuery.of(context).size.width - 52) / 2,
+                child: _MetricTile(title: 'Nivel más usado', value: 'Nivel $mostUsedLevel', subtitle: 'Gravedad', icon: Icons.warning_amber_rounded, color: AppColors.getEmergencyColor(mostUsedLevel)),
               ),
             ],
           ),
@@ -708,7 +705,7 @@ class _MetricTile extends StatelessWidget {
       container: true,
       label: '$title: $value',
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: scheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(18),
@@ -716,23 +713,24 @@ class _MetricTile extends StatelessWidget {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               children: [
                 Container(
-                  width: 42,
-                  height: 42,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.14),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(icon, color: color, size: 22),
+                  child: Icon(icon, color: color, size: 18),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     title,
-                    style: AppTypography.labelLarge.copyWith(
+                    style: AppTypography.labelSmall.copyWith(
                       color: scheme.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
                     ),
@@ -742,18 +740,17 @@ class _MetricTile extends StatelessWidget {
                 ),
               ],
             ),
-            const Spacer(),
+            const SizedBox(height: 8),
             Text(
               value,
-              style: AppTypography.titleLarge.copyWith(
+              style: AppTypography.subtitleLarge.copyWith(
                 color: scheme.onSurface,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 2),
             Text(
               subtitle,
-              style: AppTypography.bodySmall.copyWith(
+              style: AppTypography.labelSmall.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
               maxLines: 1,
@@ -904,11 +901,7 @@ class _LastEventCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.warning_rounded,
-                          color: levelColor,
-                          size: 18,
-                        ),
+                        Icon(Icons.warning_rounded, color: levelColor, size: 18),
                         const SizedBox(width: 6),
                         Text(
                           'Nivel $level',
@@ -921,10 +914,7 @@ class _LastEventCard extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: scheme.onSurfaceVariant,
-                  ),
+                  Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
                 ],
               ),
               const SizedBox(height: 14),
@@ -945,23 +935,11 @@ class _LastEventCard extends StatelessWidget {
               const SizedBox(height: 14),
               Row(
                 children: [
-                  _MiniPill(
-                    icon: Icons.timer_outlined,
-                    text: duration,
-                    color: AppColors.primary,
-                  ),
+                  _MiniPill(icon: Icons.timer_outlined, text: duration, color: AppColors.primary),
                   const SizedBox(width: 8),
-                  _MiniPill(
-                    icon: Icons.directions_car_outlined,
-                    text: '$vehicles vehículos',
-                    color: AppColors.emergency2,
-                  ),
+                  _MiniPill(icon: Icons.directions_car_outlined, text: '$vehicles vehículos', color: AppColors.emergency2),
                   const SizedBox(width: 8),
-                  _MiniPill(
-                    icon: Icons.traffic_outlined,
-                    text: '$trafficLights semáf.',
-                    color: AppColors.primaryDark,
-                  ),
+                  _MiniPill(icon: Icons.traffic_outlined, text: '$trafficLights semáf.', color: AppColors.primaryDark),
                 ],
               ),
             ],
